@@ -319,8 +319,4 @@ def run(name):
     iio.imwrite(uri= new_name, image=new_img)
     plt.imshow(new_img)
     plt.show()  
-    
-root = Path(r"C:\Users\xxgra\Downloads\DR_chip1_stack123")
-img = "stack2_D3.tif"
-run(str(root/Path(img)))
 
