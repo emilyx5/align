@@ -37,7 +37,7 @@ def slice(img):
     #retrieve tiles with alignment marks and clear any residual small bits by processing again
     topL = sliced[0,0, :TILE_H, :TILE_W-800, :]
     topL = process(topL, min, max)
-   
+    
     topR = sliced[0,1, :TILE_H, :TILE_W-500, :]
     topR = process(topR, min, max)
 
@@ -78,67 +78,76 @@ def findPoint(section):
     coords = np.ndarray.nonzero(section)
     xCoords = coords[1]
     yCoords = coords[0]
+
     w = 20
     count = 0
     avg = 0
+
     xPts = list()
     yPts = list()
+    calcY = False
     lastPt = xCoords[0]
 
 
     # sum up each row of pixels
-
-    for pt in xCoords:
-        if count == 0:
-            avg = pt
-        count+= 1
-        if pt < lastPt:
-            avg = lastPt + avg
-            avg /= 2
-            xPts.append(avg)
-            count = 0
-            avg = 0
-        lastPt = pt
-    
-    # sum up the avgs into a single x coordinate
-
-    avg = 0
-    count = 0
-    for pt in xPts:
-        avg += pt
-        count +=1
-
-    if count != 0:        
-        x = avg / count
-
-    else:
+    if xCoords.max() == 20 and xCoords.min() == 0:
+        calcY = True
         x = w/2
 
-    # reset vals and repeat for y
-    avg = 0
-    count = 0
-    lastPt = yCoords[0]
+    else:
+        for pt in xCoords:
+            if count == 0:
+                avg = pt
+            count+= 1
+            if pt < lastPt:
+                avg = lastPt + avg
+                avg /= 2
+                xPts.append(avg)
+                count = 0
+                avg = 0
+            lastPt = pt
+        
+        # sum up the avgs into a single x coordinate
 
-    for pt in yCoords:
-        if count == 0:
-            avg = pt
-        count+= 1
-        if pt < lastPt:
-            avg = lastPt + avg
-            avg /= 2
-            yPts.append(avg)
-            count = 0
-            avg = 0
-    
-    
-    avg = 0
-    count = 0
-    for pt in yPts:
+        avg = 0
+        count = 0
+        for pt in xPts:
             avg += pt
             count +=1
 
-    if count != 0:    
-        y = avg / count
+        if count != 0:        
+            x = avg / count
+
+    # reset vals, repeat for y, except y points are already stored in increasing fashion due to the way the function scans eg: [x,x,x,x, x+1, x+1, x+1, x +2, x+2,...]
+    # weight each y value by number of occurrences (how many x vals are stored in each one)
+    avg = 0
+    count = 0
+    total_count = 0
+
+    lastPt = yCoords[0]
+
+    # here count keeps track of the occurrences and will be used to calculate the weight (20 is the maximum occurrences a y-val can have)
+    if calcY:
+        for pt in yCoords:
+            if count == 0:
+                avg = pt
+            count+= 1
+            if pt != lastPt:
+                avg = lastPt * count
+                yPts.append(avg)
+                total_count += count
+                count = 0
+                avg = 0
+            lastPt = pt
+        
+        avg = 0
+        count = 0
+        for pt in yPts:
+                avg += pt
+                count +=1
+
+        if count != 0:    
+            y = avg / total_count
     else:
         y = w / 2
 
@@ -154,15 +163,16 @@ def splitCoords(axisCoords, quadrant):
     yMax = yCoords.max()
     yMin = yCoords.min()
 
-    l = 150
+    adj = 150
     w = 20
 
     # split the quadrant into 4 parts, each containing a subsection of the cross to be used for analysis
+    # arbitrary numbers for how long each section should be
 
-    top = quadrant[yMin + 40: yMin + 40 + w  + 1, xMin + l: xMax - l  + 1,  :]
-    bottom = quadrant[ yMax - 40 - w: yMax - 40 + 1 , xMin + l: xMax - l + 1,:]
-    left = quadrant[ yMin + l: yMax - l + 1, xMin + 40: xMin + 40 + w + 1 , :]
-    right = quadrant[ yMin + l: yMax - l + 1,  xMax - 40 - w: xMax - 40 + 1 , :]
+    top = quadrant[yMin + 40: yMin + 40 + w  + 1, xMin + adj: xMax - adj  + 1,  :]
+    bottom = quadrant[ yMax - 40 - w: yMax - 40 + 1 , xMin + adj: xMax - adj + 1,:]
+    left = quadrant[ yMin + adj: yMax - adj + 1, xMin + 40: xMin + 40 + w + 1 , :]
+    right = quadrant[ yMin + adj: yMax - adj + 1,  xMax - 40 - w: xMax - 40 + 1 , :]
 
     return top, bottom, left, right
 
@@ -252,24 +262,22 @@ def draw(coords, name, bad, tiles):
             tY += yMin + 40 + adj_y
             bX += xMin + 150  + adj_x
             bY += yMax - 60 + adj_y
+
             lX += xMin + 40  + adj_x
             lY += yMin + 150  + adj_y
             rX += xMax - 60  + adj_x
             rY += yMin + 150  + adj_y
 
-            mark1,mark2 = line(tY, tX, bY, bX)
-            set_color(img, (mark1 , mark2), [255,0,0])
+            # mark1,mark2 = line(tY, tX, bY, bX)
+            # set_color(img, (mark1 , mark2), [255,0,0])
             
-            mark3,mark4 = line(lY, lX, rY, rX)
-            set_color(img, (mark3 , mark4), [255,0,0])     
+            # mark3,mark4 = line(lY, lX, rY, rX)
+            # set_color(img, (mark3 , mark4), [255,0,0])     
            
-
-            
             m1, c1,vert = slope(tX, tY , bX , bY )
             m2, c2,none = slope(lX, lY, rX, rY)
 
             xf,yf = intersection(m1, c1, m2, c2, vert)
-
 
             if quad == x2:
                 x2 = xf
@@ -283,7 +291,7 @@ def draw(coords, name, bad, tiles):
                 x1 = xf
                 y1 = yf
 
-            mark1,mark2 = disk((yf ,xf), 0.5, shape= None)
+            mark1,mark2 = disk((yf ,xf), 0.1, shape= None)
             set_color(img, (mark1 , mark2), [255,0,0])
         
         quad+=1
@@ -319,4 +327,3 @@ def run(name):
     iio.imwrite(uri= new_name, image=new_img)
     plt.imshow(new_img)
     plt.show()  
-
